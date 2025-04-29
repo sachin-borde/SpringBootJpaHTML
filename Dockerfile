@@ -1,11 +1,11 @@
-# Use a lightweight JDK image
+# Use a lightweight OpenJDK image
 FROM openjdk:17-jdk-alpine
 
-# Copy the Spring Boot fat JAR
+# Copy the Spring Boot fat JAR (built by Maven)
 COPY target/*.jar app.jar
 
-# Expose default port
+# Expose the default port
 EXPOSE 8080
 
-# Launch the application
+# Run the application
 ENTRYPOINT ["java","-jar","/app.jar"]
