@@ -2,56 +2,47 @@ pipeline {
   agent any
 
   environment {
-    // Add Java home
-    JAVA_HOME = "/usr/lib/jvm/java-21-openjdk-amd64" // Match your Java version
+    // Docker Hub credentials ID in Jenkins
     DOCKER_CRED_ID = 'dockerhub-creds'
-    DOCKER_USER = 'ssborde26'
-    IMAGE_NAME = "${DOCKER_USER}/springboot-app"
-    IMAGE_TAG = "${env.BUILD_NUMBER}"
-    FULL_IMAGE = "${IMAGE_NAME}:${IMAGE_TAG}"
+    // Docker Hub repo (replace with your own)
+    DOCKER_IMAGE   = 'ssborde26/springboot'
   }
 
   stages {
     stage('Checkout') {
-        steps {
-            checkout scm
-            sh 'chmod +x mvnw'
-            sh 'ls -la .mvn/wrapper/*' // Verify files
-        }
-    }
-
-    stage('Setup Java') {
       steps {
-        // Install Java if missing (Ubuntu/Debian)
-        sh '''
-          sudo apt-get update -y
-          sudo apt-get install -y openjdk-17-jdk
-        '''
+        // Pull from GitHub
+        git url: 'https://github.com/your-org/your-springboot-repo.git', branch: 'master'
       }
     }
 
     stage('Build JAR') {
       steps {
-        sh './mvnw --version' // Verify Java setup
+        // Build with Maven wrapper (or use mvn if no wrapper)
         sh './mvnw clean package -DskipTests'
       }
     }
 
     stage('Build Docker Image') {
       steps {
+        // Build and tag image as <repo>:<buildNumber> and as latest
         script {
-          dockerImage = docker.build(FULL_IMAGE)
+          docker.build("${DOCKER_IMAGE}:${env.BUILD_NUMBER}", '.')
         }
       }
     }
 
     stage('Push to Docker Hub') {
       steps {
-        script {
-          docker.withRegistry('', "${DOCKER_CRED_ID}") {
-            dockerImage.push("${IMAGE_TAG}")
-            dockerImage.push('latest')
-          }
+        // Log in and push both tags
+        withCredentials([usernamePassword(
+          credentialsId: "$DOCKER_CRED_ID",
+          usernameVariable: 'DOCKER_USER',
+          passwordVariable: 'DOCKER_PASS'
+        )]) {
+          sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+          sh "docker push ${DOCKER_IMAGE}:${env.BUILD_NUMBER}"
+          sh "docker push ${DOCKER_IMAGE}:latest"
         }
       }
     }
@@ -59,8 +50,8 @@ pipeline {
 
   post {
     always {
-      // Optional: Add Docker cleanup
-      sh 'docker rmi ${FULL_IMAGE} || true'
+      // Cleanup workspace & dangling images
+      sh 'docker rmi ${DOCKER_IMAGE}:${env.BUILD_NUMBER} || true'
       cleanWs()
     }
   }
